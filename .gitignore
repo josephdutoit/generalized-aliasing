@@ -1,5 +1,6 @@
 # Python-generated files
 __pycache__/
+lightning_logs/
 *.py[oc]
 build/
 dist/
