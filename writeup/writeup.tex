@@ -1,0 +1,127 @@
+% Basic LaTeX template: save as writeup.tex
+\documentclass[11pt,a4paper]{article}
+
+%-------------------------
+% Packages
+%-------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{geometry}
+\geometry{margin=1in}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{listings}      % for code blocks
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+
+%-------------------------
+% Listing style (customize as needed)
+%-------------------------
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    numbers=left,
+    numberstyle=\tiny,
+    frame=single,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    showstringspaces=false
+}
+
+%-------------------------
+% Theorem environments
+%-------------------------
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+
+%-------------------------
+% Metadata
+%-------------------------
+\title{Title of the Document}
+\author{Author Name \\ \texttt{email@example.com}}
+\date{\today}
+
+%-------------------------
+% Document
+%-------------------------
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A short abstract (2–4 sentences) describing the purpose and main results.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+\section{Introduction}
+Introduce the problem, context, and contributions. Keep references like \cite{example-ref}.
+
+\section{Related Work}
+Summarize prior work relevant to this writeup.
+
+\section{Method}
+Present methods, definitions, and main theoretical results.
+
+\begin{definition}
+An example definition.
+\end{definition}
+
+\begin{theorem}
+An example theorem.
+\end{theorem}
+
+\section{Experiments}
+Describe experimental setup, datasets, and metrics.
+
+\begin{figure}[htbp]
+    \centering
+    % \includegraphics[width=0.7\linewidth]{figures/example.png}
+    \caption{Example figure (uncomment and set path).}
+    \label{fig:example}
+\end{figure}
+
+\section{Results}
+Report results in tables/figures. Use \texttt{booktabs} for tables.
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{lcc}
+        \toprule
+        Method & Metric A & Metric B \\
+        \midrule
+        Baseline & 0.70 & 0.65 \\
+        Ours     & 0.82 & 0.78 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Example results table.}
+    \label{tab:results}
+\end{table}
+
+\section{Conclusion}
+Summarize findings and future work.
+
+\appendix
+\section{Appendix: Additional Details}
+Extra material, proofs, or extended results.
+
+%-------------------------
+% Bibliography
+%-------------------------
+% Create a file named `refs.bib` and add your BibTeX entries there.
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}
