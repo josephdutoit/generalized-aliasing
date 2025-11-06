@@ -68,7 +68,7 @@ class SmallModel(nn.Module):
         output = self.theta(projected_features)
         return output   
 
-
+# TODO: Big model should be able to optionally accept a pre-trained small model not just load from weights
 class BigModel(nn.Module):
     def __init__(self, config: ModelConfig):
         super(BigModel, self).__init__()
@@ -110,26 +110,26 @@ class BigModel(nn.Module):
         all_projected = torch.hstack([small_projected, big_projected])
         return all_projected
     
-    def _compute_gad(self, x) -> dict:
+    def compute_gad(self, x, num_train) -> dict:
         # X should be ALL of the data
         projected = self.get_features(x)
 
         # Remember to add the bias term
-        projected = torch.hstack(
+        projected = torch.hstack((
             torch.ones(projected.shape[0], 1), projected
-        )
-        
-        m_tm = projected[:, : self.config.small_num_basis_funcs + 1]
-        m_tu = projected[:, self.config.small_num_basis_funcs + 1 :]
+        ))
+
+        m_tm = projected[:num_train, : self.config.small_num_basis_funcs + 1]
+        m_tu = projected[:num_train, self.config.small_num_basis_funcs + 1 :]
 
         m_tm_pinv = torch.linalg.pinv(m_tm)
         a = m_tm_pinv @ m_tu
         b = m_tm_pinv @ m_tm
         p_n = torch.eye(b.shape[1], device=x.device) - b
-        
-        theta_m = torch.hstack(
+
+        theta_m = torch.vstack((
             self.theta.bias.unsqueeze(0), self.theta.weight[:, : self.config.small_num_basis_funcs].T
-        )
+        ))
 
         theta_u = self.theta.weight[:, self.config.small_num_basis_funcs :].T
 
