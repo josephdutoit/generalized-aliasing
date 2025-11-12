@@ -164,6 +164,7 @@ class Model(lightning.LightningModule):
             raise ValueError(f"Unsupported model type: {model_type}")
 
         self.criterion = nn.MSELoss()
+        self.final_val_loss = None
 
     def forward(self, x):
         return self.model(x)
@@ -173,6 +174,13 @@ class Model(lightning.LightningModule):
         y_hat = self(x)
         loss = self.criterion(y_hat, y)
         self.log("train_loss", loss)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = self.criterion(y_hat, y)
+        self.final_val_loss = loss
         return loss
 
     def configure_optimizers(self):

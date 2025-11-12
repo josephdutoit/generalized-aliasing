@@ -1,5 +1,4 @@
 import os
-from networkx import config
 import torch
 import lightning as L
 from model import Model, ModelConfig
@@ -7,6 +6,8 @@ from dataclasses import dataclass
 from data import DataConfig, GadDataset
 from viz import Plotter
 from copy import deepcopy
+import concurrent.futures
+from typing import Optional, Sequence
 
 
 #TODO: Can we find someway that passes stuff rather than saving and loading?
@@ -61,8 +62,6 @@ class Run:
             model_config.big_model_save_path
         )
 
-        print(f"SAVE PATHS: {model_config.small_model_save_path}, {model_config.big_model_save_path}")
-
         small_model = Model(model_config, model_type="small")
         big_dataset = torch.load(data_config.dataset_path, weights_only=False)
 
@@ -72,7 +71,11 @@ class Run:
             batch_size=self.config.small_model_batch_size,
             shuffle=True,
         )
-
+        test_loader = torch.utils.data.DataLoader(
+            big_dataset,
+            batch_size=1,
+            shuffle=False,
+        )
         trainer = L.Trainer(
             max_epochs=self.config.small_model_epochs,
             accelerator=self.config.accelerator,
@@ -81,6 +84,11 @@ class Run:
         trainer.fit(
             small_model,
             loader,
+        )
+
+        trainer.test(
+            small_model,
+            test_loader,
         )
 
         torch.save(
@@ -111,6 +119,7 @@ class Run:
         )
 
         gad = big_model.model.compute_gad(big_dataset.X , data_config.num_samples_small)
+        gad["small_model_val_loss"] = small_model.final_val_loss
         torch.save(gad, os.path.join(self.config.save_path, "gad_results.pth")) #Fix this pathing
 
         # TODO: Move plotting to separate function
@@ -162,12 +171,24 @@ class Run:
             plotter.save(os.path.join(self.config.save_path, "big_" + self.config.features_plot_path))
 
 
+def _run_worker(args):
+    """
+    Worker executed in a separate process. args is a tuple:
+      (run_model_config, run_data_config, run_config, gpu)
+    """
+    run_model_config, run_data_config, run_config, gpu = args
+    if gpu is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    run = Run(run_config)
+    run.run(run_model_config, run_data_config)
+    return run_config.run_name
+
 # TODO: Parallelize all the runs
 class Experiment:
     def __init__(self, config: ExperimentConfig):
         self.config = config
 
-    def run(self, model_config: ModelConfig, data_config: DataConfig):
+    def run(self, model_config: ModelConfig, data_config: DataConfig, parallel_k: int = 1, gpu_devices: Optional[Sequence[int]] = None):
         if not os.path.exists(os.path.join(self.config.save_dir, self.config.experiment_name)):
             os.makedirs(os.path.join(self.config.save_dir, self.config.experiment_name))
         else:
@@ -177,6 +198,8 @@ class Experiment:
             dataset = GadDataset(data_config)
             torch.save(dataset, data_config.dataset_path)
 
+        # build task list
+        tasks = []
         for repeat in range(self.config.num_repeats):
             torch.random.manual_seed(repeat + 42)
             for n_val in self.config.n_vals:
@@ -186,7 +209,7 @@ class Experiment:
                 if not self.config.samplewise:
                     run_model_config.small_num_basis_funcs = n_val
 
-                run_config = RunConfig(
+                run_cfg = RunConfig(
                     run_name=run_name,
                     plot=True,
                     save_path=os.path.join(self.config.save_dir, self.config.experiment_name, run_name)
@@ -195,8 +218,27 @@ class Experiment:
                 if self.config.samplewise:
                     run_data_config.num_samples_small = n_val
 
-                run = Run(run_config)
-                run.run(run_model_config, run_data_config)
+                tasks.append((run_model_config, run_data_config, run_cfg))
 
-                del run_model_config
-                del run_data_config
+        if parallel_k is None or parallel_k <= 1:
+            for run_model_config, run_data_config, run_cfg in tasks:
+                run = Run(run_cfg)
+                run.run(run_model_config, run_data_config)
+        else:
+            max_workers = min(parallel_k, len(tasks))
+            use_gpus = list(gpu_devices) if gpu_devices else None
+            serialized_tasks = []
+            for i, (rmc, rdc, rc) in enumerate(tasks):
+                assigned_gpu = None
+                if use_gpus:
+                    assigned_gpu = use_gpus[i % len(use_gpus)]
+                serialized_tasks.append((rmc, rdc, rc, assigned_gpu))
+
+            with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as ex:
+                futures = [ex.submit(_run_worker, t) for t in serialized_tasks]
+                for fut in concurrent.futures.as_completed(futures):
+                    try:
+                        name = fut.result()
+                        print(f"Finished run: {name}")
+                    except Exception as e:
+                        print(f"Run failed: {e}")

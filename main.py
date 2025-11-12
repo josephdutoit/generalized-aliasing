@@ -15,17 +15,17 @@ import click
 def main(num_repeats, samplewise=False):
     
     experiment_config = ExperimentConfig(
-        num_repeats=3,
+        num_repeats=5,
         samplewise=False,
         n_vals=[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100],
         # n_vals=[5, 10],
-        experiment_name="nn_interp_50",
+        experiment_name="nn_interp_50_v2",
         save_dir="results/",
         accelerator="gpu",
     )
 
     data_config = DataConfig(
-        dataset_path="gad_dataset.pth",
+        dataset_path="gad_dataset2.pth",
         num_samples_big=10000,
         num_samples_small=50,
         input_range=(-5.0, 5.0),
@@ -44,7 +44,11 @@ def main(num_repeats, samplewise=False):
     )
 
     experiment = Experiment(experiment_config)
-    experiment.run(model_config=model_config, data_config=data_config)
+    experiment.run(
+        model_config=model_config, 
+        data_config=data_config,
+        parallel_k=4,
+    )
     
 
 if __name__ == "__main__":

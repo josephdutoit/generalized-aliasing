@@ -15,7 +15,7 @@ class DataConfig:
 #TODO: Make a class that uses a linear combination of some specifieed basis functions
 def synthetic_function(X: torch.Tensor, N_terms: int = 50) -> torch.Tensor:
     n_values = torch.arange(1, N_terms + 1, dtype=X.dtype, device=X.device)
-    arg = X.unsqueeze(-1) * n_values
+    arg = X.unsqueeze(-1) * n_values * n_values
     sin_terms = torch.sin(arg) / n_values
     return torch.sum(sin_terms, dim=-1)
 
@@ -42,3 +42,9 @@ class GadDataset(Dataset):
     def __len__(self):
         return self.num_samples
     
+if __name__ == "__main__":
+    from viz import Plotter
+    x = torch.linspace(-5, 5, 1000).unsqueeze(-1)
+    plotter = Plotter()
+    plotter.plot_function(x, lambda x: synthetic_function(x))
+    plotter.save("synthetic_function.png")
