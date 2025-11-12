@@ -1,6 +1,8 @@
 # Python-generated files
 __pycache__/
 lightning_logs/
+slurm_logs/
+results/
 *.py[oc]
 build/
 dist/
