@@ -58,7 +58,7 @@ class SmallModel(nn.Module):
         self.theta = nn.Linear(config.small_num_basis_funcs, 1)
         self.activation_fn = config.activation_fn()
 
-    def get_features(self, x):
+    def get_features(self, x, normalize: bool = False): #TODO: Add normalization for small model too
         features = self.backbone(x)
         projected_features = self.activation_fn(self.feature_projector(features))
         return projected_features
@@ -96,28 +96,50 @@ class BigModel(nn.Module):
 
         self.theta = nn.Linear(config.big_num_basis_funcs, 1)
         self.activation_fn = config.activation_fn()
+        self.feature_norms = None
 
     def forward(self, x):
         all_projected = self.get_features(x)
         output = self.theta(all_projected)
         return output
 
-    def get_features(self, x):
+    def get_features(self, x, normalize: bool = False):
         features = self.backbone(x)
         small_projected = self.activation_fn(self.mtm_projector(features))
         richer_features = self.feature_backbone(features)
         big_projected = self.activation_fn(self.mtu_projector(richer_features))
         all_projected = torch.hstack([small_projected, big_projected])
+
+        if self.feature_norms is not None and normalize:
+            all_projected = all_projected / (self.feature_norms + 1e-8)
+
         return all_projected
     
-    def compute_gad(self, x, num_train) -> dict:
-        # X should be ALL of the data
-        projected = self.get_features(x)
+    def compute_gad(
+        self, 
+        x, 
+        num_train, 
+        interval: tuple[float, float] | None = None,
+        num_norm_points: int = 1000,
+        normalize_features = True,
+    ) -> dict:
 
+        if normalize_features:
+            linspace = torch.linspace(interval[0], interval[1], steps=num_norm_points).unsqueeze(1).to(x.device)
+            with torch.no_grad():
+                y = self.get_features(linspace)
+                norms = torch.sqrt(torch.trapz(y**2, linspace, dim=0))
+
+        # X should be ALL of the data
+        projected = self.get_features(x).clone().detach()
+        bias_column = torch.ones(projected.shape[0], 1, device=x.device)
+
+        if normalize_features:
+            projected = projected / (norms + 1e-8)
+            bias_column = bias_column / (interval[1] - interval[0])
+        
         # Remember to add the bias term
-        projected = torch.hstack((
-            torch.ones(projected.shape[0], 1), projected
-        ))
+        projected = torch.hstack((bias_column, projected))
 
         m_tm = projected[:num_train, : self.config.small_num_basis_funcs + 1]
         m_tu = projected[:num_train, self.config.small_num_basis_funcs + 1 :]
@@ -127,13 +149,21 @@ class BigModel(nn.Module):
         b = m_tm_pinv @ m_tm
         p_n = torch.eye(b.shape[1], device=x.device) - b
 
+        theta_bias = self.theta.bias.clone().detach().unsqueeze(0)
+        theta_weight = self.theta.weight.clone().detach()
+
+        if normalize_features:
+            theta_bias *= (interval[1] - interval[0])
+            theta_weight *= norms.unsqueeze(0)
+        
         theta_m = torch.vstack((
-            self.theta.bias.unsqueeze(0), self.theta.weight[:, : self.config.small_num_basis_funcs].T
+            theta_bias, 
+            theta_weight[:, : self.config.small_num_basis_funcs].T
         ))
 
-        theta_u = self.theta.weight[:, self.config.small_num_basis_funcs :].T
+        theta_u = theta_weight[:, self.config.small_num_basis_funcs :].T
 
-        return {
+        results = {
             "m_tm": m_tm,
             "m_tu": m_tu,
             "a": a,
@@ -141,14 +171,13 @@ class BigModel(nn.Module):
             "theta_m": theta_m,
             "theta_u": theta_u,
         }
-        
-    
-    def _get_unmodeled_param_norm(self):
-        return torch.norm(
-            self.theta.weight[:, self.config.small_num_basis_funcs:], 
-            p=2,
-        )
-    
+
+        if normalize_features:
+            results["norms"] = norms
+            self.feature_norms = norms
+        return results
+
+
 class Model(lightning.LightningModule):
     def __init__(
         self, 
@@ -186,16 +215,7 @@ class Model(lightning.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=1e-3)
     
-    def get_features(self, x):
-        return self.model.get_features(x)
-    
-    def _get_unmodeled_param_norm(self):
-        if isinstance(self.model, BigModel):
-            return self.model._get_unmodeled_param_norm()
-        else:
-            raise ValueError("Unmodeled parameter norm is only defined for BigModel")
-        
-    
-    
+    def get_features(self, x, normalize: bool = False):
+        return self.model.get_features(x, normalize=normalize)
 
 

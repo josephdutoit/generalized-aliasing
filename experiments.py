@@ -118,7 +118,14 @@ class Run:
             model_config.big_model_save_path
         )
 
-        gad = big_model.model.compute_gad(big_dataset.X , data_config.num_samples_small)
+        big_model.model.eval()
+
+        gad = big_model.model.compute_gad(
+            big_dataset.X, 
+            data_config.num_samples_small,
+            interval=data_config.input_range,
+            normalize_features=True,
+        )
         gad["small_model_val_loss"] = small_model.final_val_loss
         torch.save(gad, os.path.join(self.config.save_path, "gad_results.pth")) #Fix this pathing
 
@@ -138,6 +145,7 @@ class Run:
             )
             plotter.plot_function(
                 x,
+
                 lambda x: small_model(x),
                 label="Small Model Prediction",
             )
@@ -165,7 +173,7 @@ class Run:
 
             plotter.plot_function(
                 x,
-                lambda x: big_model.get_features(x),
+                lambda x: big_model.get_features(x, normalize=True),
                 label="Basis Functions",
             )
             plotter.save(os.path.join(self.config.save_path, "big_" + self.config.features_plot_path))
