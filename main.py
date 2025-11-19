@@ -19,7 +19,7 @@ def main(num_repeats, samplewise=False):
         samplewise=False,
         n_vals=[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100],
         # n_vals=[5, 10],
-        experiment_name="nn_interp_50_v2",
+        experiment_name="interp_50_normalized",
         save_dir="results/",
         accelerator="gpu",
     )
